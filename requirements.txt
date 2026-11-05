@@ -1,0 +1,6 @@
+psutil~=7.2.2
+protobuf~=7.36.2
+numpy~=2.5.4
+ir_datasets~=0.6.3
+PyDrive2~=1.21.3
+tqdm~=4.70.1
