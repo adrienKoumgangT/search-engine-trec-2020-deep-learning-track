@@ -1,26 +1,67 @@
 import ir_datasets
 import numpy as np
+import os
 import tarfile
+import time
 import urllib.request
-from tqdm.auto import tqdm
+import urllib.error
 from pathlib import Path
+from tqdm.auto import tqdm
 
+from configuration import WORK, DATA_DIR, COLLECTION_TGZ, COLLECTION_TSV, PID_MAP_FILE
 
-# --- Configuration ---
-
-WORK = Path.cwd() / 'work'
-WORK.mkdir(exist_ok=True)
-
-DATA_DIR = WORK / 'data'
-DATA_DIR.mkdir(exist_ok=True)
-
-COLLECTION_TGZ = DATA_DIR / 'collection.tar.gz'
-COLLECTION_TSV = DATA_DIR / 'collection.tsv'
-PID_MAP_FILE   = DATA_DIR / 'pid_to_docid.npy'
 
 # --- Get Collection ---
 
 COLLECTION_URL = 'https://msmarco.z22.web.core.windows.net/msmarcoranking/collection.tar.gz'
+
+
+def download_with_resume(url, target_path, chunk_size=1<<20, max_retries=8):
+    existing_size = target_path.stat().st_size if target_path.exists() else 0
+
+    for attempt in range(max_retries):
+        try:
+            req = urllib.request.Request(url)
+            if existing_size > 0:
+                req.add_header('Range', f'bytes={existing_size}-')
+
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                if resp.status == 200:
+                    existing_size = 0
+                    mode = 'wb'
+                else:
+                    mode = 'ab'
+
+                total = int(resp.headers.get("Content-Length", 0)) or None
+                if total is not None:
+                    total += existing_size
+
+                with open(target_path, mode) as out, \
+                     tqdm(total=total, initial=existing_size, unit="B",
+                          unit_scale=True, desc="collection.tar.gz") as bar:
+                    while True:
+                        chunk = resp.read(chunk_size)
+                        if not chunk:
+                            break
+                        out.write(chunk)
+                        existing_size += len(chunk)
+                        bar.update(len(chunk))
+            print("Download completed")
+            return
+
+        except ConnectionRefusedError as e:
+            wait = min(30 * (attempt + 1), 300)  # 30s, 60s, 90s, ... up to 5 min
+            print(f"Connection refused. Waiting {wait}s before retry "
+                  f"({attempt+1}/{max_retries})...")
+            time.sleep(wait)
+
+        except (ConnectionResetError, urllib.error.URLError) as e:
+            wait = min(10 * (attempt + 1), 120)
+            print(f"Download interrupted ({e}), downloaded {existing_size} bytes. "
+                  f"Waiting {wait}s then retrying ({attempt+1}/{max_retries})...")
+            time.sleep(wait)
+
+    raise RuntimeError("Download failed after all retries")
 
 def get_collection_and_extract(
         collection_tgz: Path = COLLECTION_TGZ,
@@ -30,25 +71,10 @@ def get_collection_and_extract(
 ):
     if collection_tgz.exists():
         print(f"Already present, skipping download: {collection_tgz}")
-        return
-
-    print("Downloading from msmarco.z22.web.core.windows.net…")
-
-    # !wget - q - -show - progress - O "{collection_tgz}" "{collection_url}"
-
-    with urllib.request.urlopen(collection_url) as resp:
-        total = int(resp.headers.get("Content-Length", 0)) or None
-        with open(collection_tgz, "wb") as out, \
-             tqdm(total=total, unit="B", unit_scale=True, desc="collection.tar.gz") as bar:
-            while True:
-                chunk = resp.read(chunk_size)
-                if not chunk:
-                    break
-                out.write(chunk)
-                bar.update(len(chunk))
-
-    print(f"{collection_tgz.stat().st_size / 1e9:.2f} GB")
-
+    else:
+        print("Downloading from msmarco.z22.web.core.windows.net…")
+        download_with_resume(collection_url, collection_tgz, chunk_size=chunk_size)
+        print(f"{collection_tgz.stat().st_size / 1e9:.2f} GB")
 
     if collection_tsv.exists():
         print(f"Already extracted : {collection_tsv}")
@@ -60,7 +86,6 @@ def get_collection_and_extract(
         member = tf.getmember('collection.tsv')
         tf.extract(member, path=DATA_DIR)
     print(f"{collection_tsv} ({collection_tsv.stat().st_size / 1e9:.2f} GB)")
-
 
 # --- Robust parser with handling for "messy" inputs
 
