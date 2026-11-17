@@ -1,6 +1,26 @@
+
+# Load configuration first
+from configuration import (
+    WORK,
+    DATA_DIR,
+    COLLECTION_TGZ,
+    COLLECTION_TSV,
+    PID_MAP_FILE
+)
+import os
+
+# Configure ir_datasets BEFORE importing it
+IR_CACHE = WORK
+IR_TEMP = WORK / "ir_datasets_tmp"
+
+IR_CACHE.mkdir(parents=True, exist_ok=True)
+IR_TEMP.mkdir(parents=True, exist_ok=True)
+
+os.environ["IR_DATASETS_HOME"] = str(IR_CACHE)
+os.environ["IR_DATASETS_TMP"] = str(IR_TEMP)
+
 import ir_datasets
 import numpy as np
-import os
 import tarfile
 import time
 import urllib.request
@@ -8,7 +28,7 @@ import urllib.error
 from pathlib import Path
 from tqdm.auto import tqdm
 
-from configuration import WORK, DATA_DIR, COLLECTION_TGZ, COLLECTION_TSV, PID_MAP_FILE
+# from configuration import WORK, DATA_DIR, COLLECTION_TGZ, COLLECTION_TSV, PID_MAP_FILE
 
 
 # --- Get Collection ---

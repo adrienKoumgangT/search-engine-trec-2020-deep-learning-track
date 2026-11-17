@@ -14,4 +14,4 @@ COLLECTION_TSV = DATA_DIR / 'collection.tsv'
 PID_MAP_FILE   = DATA_DIR / 'pid_to_docid.npy'
 
 OUT_PKL = DATA_DIR / "collection_tokens.pkl"
-
+IN_COLAB = False
