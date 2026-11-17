@@ -5,19 +5,20 @@ from configuration import (
     DATA_DIR,
     COLLECTION_TGZ,
     COLLECTION_TSV,
-    PID_MAP_FILE
+    PID_MAP_FILE,
+IN_COLAB
 )
 import os
 
-# Configure ir_datasets BEFORE importing it
-IR_CACHE = WORK
-IR_TEMP = WORK / "ir_datasets_tmp"
+if not IN_COLAB:
+    IR_CACHE = WORK
+    IR_TEMP = WORK / "ir_datasets_tmp"
 
-IR_CACHE.mkdir(parents=True, exist_ok=True)
-IR_TEMP.mkdir(parents=True, exist_ok=True)
+    IR_CACHE.mkdir(parents=True, exist_ok=True)
+    IR_TEMP.mkdir(parents=True, exist_ok=True)
 
-os.environ["IR_DATASETS_HOME"] = str(IR_CACHE)
-os.environ["IR_DATASETS_TMP"] = str(IR_TEMP)
+    os.environ["IR_DATASETS_HOME"] = str(IR_CACHE)
+    os.environ["IR_DATASETS_TMP"] = str(IR_TEMP)
 
 import ir_datasets
 import numpy as np
@@ -36,52 +37,17 @@ from tqdm.auto import tqdm
 COLLECTION_URL = 'https://msmarco.z22.web.core.windows.net/msmarcoranking/collection.tar.gz'
 
 
-def download_with_resume(url, target_path, chunk_size=1<<20, max_retries=8):
-    existing_size = target_path.stat().st_size if target_path.exists() else 0
-
-    for attempt in range(max_retries):
-        try:
-            req = urllib.request.Request(url)
-            if existing_size > 0:
-                req.add_header('Range', f'bytes={existing_size}-')
-
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                if resp.status == 200:
-                    existing_size = 0
-                    mode = 'wb'
-                else:
-                    mode = 'ab'
-
-                total = int(resp.headers.get("Content-Length", 0)) or None
-                if total is not None:
-                    total += existing_size
-
-                with open(target_path, mode) as out, \
-                     tqdm(total=total, initial=existing_size, unit="B",
-                          unit_scale=True, desc="collection.tar.gz") as bar:
-                    while True:
-                        chunk = resp.read(chunk_size)
-                        if not chunk:
-                            break
-                        out.write(chunk)
-                        existing_size += len(chunk)
-                        bar.update(len(chunk))
-            print("Download completed")
-            return
-
-        except ConnectionRefusedError as e:
-            wait = min(30 * (attempt + 1), 300)  # 30s, 60s, 90s, ... up to 5 min
-            print(f"Connection refused. Waiting {wait}s before retry "
-                  f"({attempt+1}/{max_retries})...")
-            time.sleep(wait)
-
-        except (ConnectionResetError, urllib.error.URLError) as e:
-            wait = min(10 * (attempt + 1), 120)
-            print(f"Download interrupted ({e}), downloaded {existing_size} bytes. "
-                  f"Waiting {wait}s then retrying ({attempt+1}/{max_retries})...")
-            time.sleep(wait)
-
-    raise RuntimeError("Download failed after all retries")
+def download_collection(collection_url, collection_tgz, chunk_size=1<<20):
+    with urllib.request.urlopen(collection_url) as resp:
+        total = int(resp.headers.get("Content-Length", 0)) or None
+        with open(collection_tgz, "wb") as out, \
+             tqdm(total=total, unit="B", unit_scale=True, desc="collection.tar.gz") as bar:
+            while True:
+                chunk = resp.read(chunk_size)
+                if not chunk:
+                    break
+                out.write(chunk)
+                bar.update(len(chunk))
 
 def get_collection_and_extract(
         collection_tgz: Path = COLLECTION_TGZ,
@@ -93,7 +59,7 @@ def get_collection_and_extract(
         print(f"Already present, skipping download: {collection_tgz}")
     else:
         print("Downloading from msmarco.z22.web.core.windows.net…")
-        download_with_resume(collection_url, collection_tgz, chunk_size=chunk_size)
+        download_collection(collection_url, collection_tgz, chunk_size=chunk_size)
         print(f"{collection_tgz.stat().st_size / 1e9:.2f} GB")
 
     if collection_tsv.exists():
