@@ -7,7 +7,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from configuration import WORK, DATA_DIR, COLLECTION_TGZ, COLLECTION_TSV, PID_MAP_FILE, OUT_PKL
+from configuration import WORK, DATA_DIR, COLLECTION_TGZ, COLLECTION_TSV, PID_MAP_FILE, COLLECTION_TOKENS_PKL
 from document_processing import iter_collection, process_text
 
 
@@ -28,7 +28,7 @@ def ensure_extracted() -> None:
 
 def build_token_cache(
     tsv_path: Path = COLLECTION_TSV,
-    out_path: Path = OUT_PKL,
+    out_path: Path = COLLECTION_TOKENS_PKL,
     *,
     use_stopwords: bool = True,
     use_stemming: bool = True,
@@ -105,7 +105,7 @@ if __name__ == "__main__":
     build_token_cache()
 
     # Quick load-back sanity check
-    with open(OUT_PKL, "rb") as f:
+    with open(COLLECTION_TOKENS_PKL, "rb") as f:
         cache = pickle.load(f)
     print(f"Config: {cache['config']}")
     print(f"Loaded {len(cache['passages']):,} passages")

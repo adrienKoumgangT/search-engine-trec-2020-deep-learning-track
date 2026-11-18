@@ -7,3 +7,4 @@ py-cpuinfo==9.0.0
 tqdm==4.70.1
 protobuf==7.36.2
 PyDrive2==1.21.3
+humanize==4.17.0
